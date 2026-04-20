@@ -1,0 +1,513 @@
+================================================================
+FUNASIA SCANNER APP — COMPLETE SPECIFICATION
+================================================================
+This document contains everything needed to build the FunAsia
+ticket scanner app from scratch in a new Claude Code session.
+================================================================
+
+
+----------------------------------------------------------------
+1. WHAT THIS APP IS
+----------------------------------------------------------------
+A simple mobile-first web app (PWA) used by event organizers at
+the door of FunAsia events. The organizer logs in, selects their
+event, and scans attendee ticket QR codes using their phone
+camera. Each scan marks the ticket as checked-in in the database
+and shows a clear pass/fail result on screen.
+
+No backend changes needed — the API is already built.
+
+
+----------------------------------------------------------------
+2. TECH STACK
+----------------------------------------------------------------
+- Framework    : React + Vite (plain web app, no React Native)
+- Styling      : Tailwind CSS
+- QR Scanning  : html5-qrcode  (npm package)
+- HTTP Client  : axios
+- State        : useState / useEffect only (no Zustand needed)
+- Deployment   : Can run as a PWA on any phone browser
+
+Why a web app and not React Native?
+The organizer will open it on their phone browser at the event.
+No app store required. html5-qrcode uses the phone camera
+natively on both iOS and Android.
+
+
+----------------------------------------------------------------
+3. EXISTING BACKEND — DO NOT CHANGE
+----------------------------------------------------------------
+The main FunAsia platform backend already has all required
+endpoints. The scanner app just calls them.
+
+Base URL (development) : http://localhost:4000/api
+Base URL (production)  : replace with your production domain
+
+All protected endpoints require this header:
+  Authorization: Bearer <access_token>
+
+
+----------------------------------------------------------------
+4. AUTH — HOW LOGIN WORKS
+----------------------------------------------------------------
+Endpoint  : POST /auth/login
+Body      : { "email": "...", "password": "..." }
+
+Success response (200):
+{
+  "user": {
+    "id": "uuid",
+    "email": "organizer@example.com",
+    "full_name": "John Doe",
+    "role": "admin"          <-- must be "admin" or "super_admin"
+  },
+  "session": {
+    "access_token": "eyJ...",
+    "refresh_token": "...",
+    "expires_at": 1234567890
+  }
+}
+
+Error response (401):
+{ "error": "Invalid email or password" }
+
+IMPORTANT: Only users with role "admin" or "super_admin" can use
+the check-in endpoints. Regular "user" role will get 403.
+
+Store the access_token in localStorage and send it as a Bearer
+token on every subsequent request.
+
+
+----------------------------------------------------------------
+5. GET ORGANIZER'S EVENTS
+----------------------------------------------------------------
+Endpoint  : GET /admin/events
+Auth      : Required (Bearer token)
+
+Returns all events owned by the logged-in organizer.
+
+Success response (200):
+{
+  "events": [
+    {
+      "id": "uuid",
+      "title": "Desi Night 2026",
+      "event_start": "2026-05-10T23:00:00Z",
+      "event_end": "2026-05-11T03:00:00Z",
+      "venue_name": "House of Blues",
+      "city": "Dallas",
+      "state": "TX",
+      "status": "published",
+      "total_sold": 142,
+      "total_seats": 300
+    },
+    ...
+  ]
+}
+
+Show only events with status "published" or "completed" in the
+event selector. Filter out "draft" and "cancelled".
+
+
+----------------------------------------------------------------
+6. GET ATTENDEE LIST FOR AN EVENT
+----------------------------------------------------------------
+Endpoint  : GET /admin/events/:eventId/attendees
+Auth      : Required (Bearer token, admin role)
+
+Returns all paid tickets for the event.
+
+Success response (200):
+{
+  "attendees": [
+    {
+      "id": "uuid",
+      "barcode": "FA-A1B2C3D4E5F6",
+      "attendee_name": "Jane Smith",
+      "attendee_email": "jane@example.com",
+      "is_checked_in": false,
+      "checked_in_at": null,
+      "ticket_tiers": { "name": "VIP", "price": 75.00 },
+      "seats": { "label": "A12", "section": "Floor" },
+      "orders": {
+        "order_number": "FA-00042",
+        "users": { "full_name": "Jane Smith", "email": "jane@..." }
+      }
+    },
+    ...
+  ]
+}
+
+This list is OPTIONAL to show. The app works purely by scanning.
+You may show it as a searchable backup list for manual lookup.
+
+
+----------------------------------------------------------------
+7. SCAN / CHECK-IN A TICKET  ← MOST IMPORTANT ENDPOINT
+----------------------------------------------------------------
+Endpoint  : POST /admin/checkin
+Auth      : Required (Bearer token, admin role)
+Body      : { "barcode": "FA-A1B2C3D4E5F6" }
+
+RESULT 1 — Valid ticket, first scan (200 OK):
+{
+  "message": "Check-in successful",
+  "attendee": "Jane Smith",
+  "ticket": {
+    "id": "uuid",
+    "barcode": "FA-A1B2C3D4E5F6",
+    "is_checked_in": true,
+    "checked_in_at": "2026-05-10T23:14:00Z",
+    "checked_in_by": "organizer-user-uuid"
+  }
+}
+→ Show GREEN screen: "✓ Welcome Jane Smith"
+
+RESULT 2 — Already checked in (409 Conflict):
+{
+  "error": "Already checked in",
+  "checked_in_at": "2026-05-10T23:14:00Z"
+}
+→ Show YELLOW/ORANGE screen: "⚠ Already Scanned"
+  Show the time it was first scanned.
+
+RESULT 3 — Invalid barcode (404 Not Found):
+{
+  "error": "Invalid barcode"
+}
+→ Show RED screen: "✗ Invalid Ticket"
+  This means the barcode is not in the database or the order
+  is not in "paid" status.
+
+RESULT 4 — Auth error (401/403):
+→ Token expired. Clear localStorage and redirect to login.
+
+
+----------------------------------------------------------------
+8. BARCODE / QR CODE FORMAT
+----------------------------------------------------------------
+All FunAsia ticket barcodes follow this format:
+
+  FA-XXXXXXXXXXXX
+
+Where X is 12 uppercase alphanumeric characters.
+Example: FA-A1B2C3D4E5F6
+
+The QR code on the PDF ticket encodes ONLY this string.
+Nothing else — no JSON, no URL, just the raw barcode string.
+
+When the camera scans the QR code, the decoded text IS the
+barcode. Send it directly to POST /admin/checkin.
+
+
+----------------------------------------------------------------
+9. APP SCREENS
+----------------------------------------------------------------
+
+SCREEN 1: LOGIN
+- FunAsia logo at top
+- Email input
+- Password input
+- "Sign In" button
+- On success: save token + user to localStorage, go to Screen 2
+- Show error message if login fails
+- Note: only show error if credentials wrong, not a generic msg
+
+SCREEN 2: EVENT SELECTOR
+- "Select Event" heading
+- Show logged-in user name + logout button in top right
+- List of organizer's events (call GET /admin/events)
+- Each event shows: title, date, venue, "X / Y checked in" count
+- Filter: show only published + completed events
+- On tap: go to Screen 3 with that event
+- Pull-to-refresh to reload event list
+
+SCREEN 3: SCANNER (main screen)
+- Event title + date at top
+- Live check-in counter: "47 / 142 checked in"
+- Camera viewfinder in the center (QR scanner box)
+- After each scan, show result overlay for 2.5 seconds, then
+  auto-resume scanning
+- Manual barcode entry option: small text input + "Scan" button
+  below the camera (for when QR is damaged or won't scan)
+- Back button to go back to event selector
+
+RESULT OVERLAYS (shown over/below the scanner for 2.5 seconds):
+
+  GREEN  — Check-in successful
+           Large ✓ icon
+           "Welcome!" in big text
+           Attendee name below it
+           Ticket tier (e.g. "VIP")
+           Seat label if applicable (e.g. "Seat A12")
+
+  ORANGE — Already scanned
+           ⚠ icon
+           "Already Checked In"
+           "First scanned at 11:14 PM"
+
+  RED    — Invalid ticket
+           ✗ icon
+           "Invalid Ticket"
+           "This barcode was not found"
+
+
+----------------------------------------------------------------
+10. SCAN FLOW LOGIC (important detail)
+----------------------------------------------------------------
+The html5-qrcode library fires a callback EVERY frame when it
+sees a QR code. Without debouncing, it will fire the API 30+
+times per second for the same code.
+
+Handle this with a "cooldown" ref:
+- Keep a ref: lastScannedBarcode = ""
+- Keep a ref: scanCooldown = false
+- When a scan fires:
+    1. If scanCooldown is true, ignore it
+    2. If decoded text === lastScannedBarcode, ignore it
+    3. Otherwise: set scanCooldown = true, call the API
+    4. Show result overlay for 2500ms
+    5. After 2500ms: clear lastScannedBarcode, set cooldown false
+
+This prevents duplicate API calls for a single scan.
+
+
+----------------------------------------------------------------
+11. LOCAL STORAGE KEYS
+----------------------------------------------------------------
+funasia_scanner_token   — JWT access token (string)
+funasia_scanner_user    — JSON stringified user object
+funasia_scanner_event   — JSON stringified selected event object
+
+On app load:
+- Check for funasia_scanner_token
+- If present, call GET /auth/me with it
+- If valid: restore user, go to event selector or scanner
+- If 401: clear storage, show login
+
+
+----------------------------------------------------------------
+12. AXIOS SETUP
+----------------------------------------------------------------
+Create an api.js like this:
+
+  import axios from "axios";
+
+  const api = axios.create({
+    baseURL: import.meta.env.VITE_API_URL, // e.g. http://localhost:4000/api
+  });
+
+  api.interceptors.request.use((config) => {
+    const token = localStorage.getItem("funasia_scanner_token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+
+  api.interceptors.response.use(
+    (res) => res,
+    (err) => {
+      if (err.response?.status === 401) {
+        localStorage.clear();
+        window.location.href = "/";
+      }
+      return Promise.reject(err);
+    }
+  );
+
+  export default api;
+
+
+----------------------------------------------------------------
+13. ENVIRONMENT VARIABLES
+----------------------------------------------------------------
+Create a .env file:
+
+  VITE_API_URL=http://localhost:4000/api
+
+For production, change to your production API URL.
+
+
+----------------------------------------------------------------
+14. QR SCANNER LIBRARY SETUP
+----------------------------------------------------------------
+Install: npm install html5-qrcode
+
+Usage pattern in React:
+
+  import { Html5QrcodeScanner } from "html5-qrcode";
+  import { useEffect, useRef } from "react";
+
+  function Scanner({ onScan }) {
+    const scannerRef = useRef(null);
+
+    useEffect(() => {
+      const scanner = new Html5QrcodeScanner("qr-reader", {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+      });
+
+      scanner.render(
+        (decodedText) => onScan(decodedText),
+        (error) => { /* ignore scan errors */ }
+      );
+
+      scannerRef.current = scanner;
+
+      return () => {
+        scanner.clear().catch(() => {});
+      };
+    }, []);
+
+    return <div id="qr-reader" style={{ width: "100%" }} />;
+  }
+
+The div with id="qr-reader" is where the camera feed renders.
+html5-qrcode injects its own UI into it.
+
+NOTE: On iOS Safari, camera access requires the page to be
+served over HTTPS (or localhost). This works fine in dev.
+For production, use HTTPS.
+
+
+----------------------------------------------------------------
+15. COLORS / BRAND (to match FunAsia)
+----------------------------------------------------------------
+Primary red    : #DC3545
+Gold           : #D4920B
+Dark bg        : #1C1917
+Mid text       : #57534E
+Light text     : #A8A29E
+Border         : #E7E5E4
+Background     : #F5F5F4
+White card     : #FFFFFF
+Teal (success) : #0D9488
+Success green  : #16A34A
+Warning orange : #D97706
+Error red      : #DC3545
+
+Font: system-ui or Inter (no custom fonts needed for scanner app)
+
+
+----------------------------------------------------------------
+16. PROJECT STRUCTURE
+----------------------------------------------------------------
+funasia-scanner/
+├── public/
+│   └── manifest.json         (PWA manifest)
+├── src/
+│   ├── main.jsx
+│   ├── App.jsx
+│   ├── utils/
+│   │   └── api.js            (axios instance)
+│   ├── pages/
+│   │   ├── LoginPage.jsx
+│   │   ├── EventSelectorPage.jsx
+│   │   └── ScannerPage.jsx
+│   └── index.css
+├── index.html
+├── vite.config.js
+├── tailwind.config.js
+└── .env
+
+
+----------------------------------------------------------------
+17. PACKAGE.JSON DEPENDENCIES
+----------------------------------------------------------------
+{
+  "dependencies": {
+    "react": "^18",
+    "react-dom": "^18",
+    "axios": "^1",
+    "html5-qrcode": "^2.3.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4",
+    "vite": "^5",
+    "tailwindcss": "^3",
+    "autoprefixer": "^10",
+    "postcss": "^8"
+  }
+}
+
+
+----------------------------------------------------------------
+18. IMPORTANT NOTES FOR IMPLEMENTATION
+----------------------------------------------------------------
+
+1. ROLE CHECK ON LOGIN
+   After login, check user.role. If it is "user" (not "admin"
+   or "super_admin"), show an error: "This app is for event
+   organizers only. Please contact FunAsia support."
+   Do not let regular attendees log in.
+
+2. NETWORK ERRORS AT EVENTS
+   Venues can have poor WiFi. Add a visible error state when
+   the API call fails due to network: "No connection — check
+   your WiFi or data and try again." Do not crash silently.
+
+3. SOUND FEEDBACK (optional but nice)
+   Play a short beep on successful scan, different tone on
+   error. Use the Web Audio API (AudioContext) — no library
+   needed. This helps the organizer without looking at screen.
+
+4. KEEP SCREEN ON
+   Use the Wake Lock API to prevent the phone screen from
+   sleeping while the scanner is active:
+     navigator.wakeLock.request("screen")
+   Wrap in try/catch as not all browsers support it.
+
+5. COUNTER UPDATE
+   After each successful check-in, increment the local counter
+   (checkedIn + 1) without re-fetching the attendees list.
+   This keeps the UI fast.
+
+6. ORIENTATION
+   Design for portrait mode. The scanner works best in portrait.
+   No need to handle landscape.
+
+7. SUPER_ADMIN CAN SEE ALL EVENTS
+   The GET /admin/events endpoint returns events owned by the
+   logged-in admin. For super_admin, it returns ALL events.
+   This is handled by the backend automatically — no extra logic
+   needed in the scanner app.
+
+8. TIME DISPLAY
+   All times in America/Chicago timezone (Central Time).
+   Use:
+     new Date(utcString).toLocaleTimeString("en-US", {
+       timeZone: "America/Chicago",
+       hour: "numeric",
+       minute: "2-digit"
+     })
+
+
+----------------------------------------------------------------
+19. SUMMARY OF API CALLS USED
+----------------------------------------------------------------
+
+POST /auth/login
+  → body: { email, password }
+  → use: login screen
+
+GET /auth/me
+  → header: Authorization Bearer
+  → use: restore session on app load
+
+GET /admin/events
+  → header: Authorization Bearer
+  → use: event selector screen
+
+GET /admin/events/:eventId/attendees
+  → header: Authorization Bearer
+  → use: optional attendee list / manual lookup
+
+POST /admin/checkin
+  → header: Authorization Bearer
+  → body: { barcode }
+  → use: main scan action — THE CORE OF THE APP
+
+
+================================================================
+END OF SPEC
+================================================================

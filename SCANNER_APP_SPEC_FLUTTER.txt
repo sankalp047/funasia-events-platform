@@ -1,0 +1,504 @@
+================================================================
+FUNASIA SCANNER APP — FLUTTER SPECIFICATION
+================================================================
+This document contains everything needed to build the FunAsia
+ticket scanner app in Flutter from scratch in a new Claude Code
+session.
+================================================================
+
+
+----------------------------------------------------------------
+1. WHAT THIS APP IS
+----------------------------------------------------------------
+A Flutter mobile app (iOS + Android) used by event organizers
+at the door of FunAsia events. The organizer logs in, selects
+their event, and scans attendee ticket QR codes using the phone
+camera. Each scan marks the ticket as checked-in in the database
+and shows a clear pass/fail result on screen.
+
+No backend changes needed — the API is already fully built.
+
+
+----------------------------------------------------------------
+2. TECH STACK
+----------------------------------------------------------------
+Framework     : Flutter 3.x (Dart)
+HTTP Client   : dio
+QR Scanning   : mobile_scanner
+Local Storage : shared_preferences
+State Mgmt    : setState only (no Provider/Riverpod needed,
+                app is simple enough)
+
+
+----------------------------------------------------------------
+3. PUBSPEC.YAML DEPENDENCIES
+----------------------------------------------------------------
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.4.0
+  mobile_scanner: ^5.0.0
+  shared_preferences: ^2.2.0
+
+No other packages needed.
+
+
+----------------------------------------------------------------
+4. EXISTING BACKEND — DO NOT CHANGE
+----------------------------------------------------------------
+The main FunAsia platform backend already has all required
+endpoints. The scanner app just calls them.
+
+Base URL (development) : http://localhost:4000/api
+Base URL (production)  : replace with your production domain
+
+Store the base URL in a constants file:
+  const String kApiBaseUrl = "http://localhost:4000/api";
+
+All protected endpoints require this header:
+  Authorization: Bearer <access_token>
+
+
+----------------------------------------------------------------
+5. AUTH — HOW LOGIN WORKS
+----------------------------------------------------------------
+Endpoint  : POST /auth/login
+Body      : { "email": "...", "password": "..." }
+
+Success response (200):
+{
+  "user": {
+    "id": "uuid",
+    "email": "organizer@example.com",
+    "full_name": "John Doe",
+    "role": "admin"
+  },
+  "session": {
+    "access_token": "eyJ...",
+    "refresh_token": "...",
+    "expires_at": 1234567890
+  }
+}
+
+Error response (401):
+{ "error": "Invalid email or password" }
+
+IMPORTANT: Only users with role "admin" or "super_admin" can
+use the check-in endpoints. After login, check user["role"].
+If it is "user", show error: "This app is for organizers only."
+and do not proceed.
+
+Save to shared_preferences:
+  prefs.setString("token", session["access_token"])
+  prefs.setString("user", jsonEncode(user))
+
+
+----------------------------------------------------------------
+6. GET ORGANIZER'S EVENTS
+----------------------------------------------------------------
+Endpoint  : GET /admin/events
+Auth      : Required (Bearer token)
+
+Success response (200):
+{
+  "events": [
+    {
+      "id": "uuid",
+      "title": "Desi Night 2026",
+      "event_start": "2026-05-10T23:00:00Z",
+      "event_end": "2026-05-11T03:00:00Z",
+      "venue_name": "House of Blues",
+      "city": "Dallas",
+      "state": "TX",
+      "status": "published",
+      "total_sold": 142,
+      "total_seats": 300
+    }
+  ]
+}
+
+Show only events with status "published" or "completed".
+Filter out "draft" and "cancelled".
+
+
+----------------------------------------------------------------
+7. GET ATTENDEE LIST FOR AN EVENT
+----------------------------------------------------------------
+Endpoint  : GET /admin/events/:eventId/attendees
+Auth      : Required (Bearer token, admin role)
+
+Success response (200):
+{
+  "attendees": [
+    {
+      "id": "uuid",
+      "barcode": "FA-A1B2C3D4E5F6",
+      "attendee_name": "Jane Smith",
+      "attendee_email": "jane@example.com",
+      "is_checked_in": false,
+      "checked_in_at": null,
+      "ticket_tiers": { "name": "VIP", "price": 75.00 },
+      "seats": { "label": "A12", "section": "Floor" },
+      "orders": {
+        "order_number": "FA-00042",
+        "users": { "full_name": "Jane Smith" }
+      }
+    }
+  ]
+}
+
+Optional — use this for a manual search/lookup list as a
+backup when a QR code is damaged and won't scan.
+
+
+----------------------------------------------------------------
+8. SCAN / CHECK-IN A TICKET  <- CORE ENDPOINT
+----------------------------------------------------------------
+Endpoint  : POST /admin/checkin
+Auth      : Required (Bearer token, admin role)
+Body      : { "barcode": "FA-A1B2C3D4E5F6" }
+
+RESULT 1 — Valid ticket, first scan (200 OK):
+{
+  "message": "Check-in successful",
+  "attendee": "Jane Smith",
+  "ticket": {
+    "id": "uuid",
+    "barcode": "FA-A1B2C3D4E5F6",
+    "is_checked_in": true,
+    "checked_in_at": "2026-05-10T23:14:00Z",
+    "checked_in_by": "uuid"
+  }
+}
+-> Show GREEN screen: check mark + "Welcome!" + attendee name
+
+RESULT 2 — Already checked in (409 Conflict):
+{
+  "error": "Already checked in",
+  "checked_in_at": "2026-05-10T23:14:00Z"
+}
+-> Show ORANGE screen: warning icon + "Already Scanned"
+   Show time of first scan.
+
+RESULT 3 — Invalid barcode (404 Not Found):
+{
+  "error": "Invalid barcode"
+}
+-> Show RED screen: X icon + "Invalid Ticket"
+
+RESULT 4 — Auth error (401 or 403):
+-> Clear shared_preferences and navigate back to login screen.
+
+
+----------------------------------------------------------------
+9. BARCODE / QR CODE FORMAT
+----------------------------------------------------------------
+All FunAsia ticket barcodes follow this format:
+
+  FA-XXXXXXXXXXXX
+
+Where X is 12 uppercase alphanumeric characters.
+Example: FA-A1B2C3D4E5F6
+
+The QR code on the ticket PDF encodes ONLY this string.
+Nothing else. No JSON, no URL, just the raw barcode string.
+
+When mobile_scanner decodes a QR code, the result value IS
+the barcode string. Send it directly to POST /admin/checkin.
+
+
+----------------------------------------------------------------
+10. APP SCREENS
+----------------------------------------------------------------
+
+SCREEN 1: LOGIN PAGE
+- FunAsia logo and name at top (text, no image file needed)
+- Email TextField
+- Password TextField (obscureText: true)
+- "Sign In" ElevatedButton
+- CircularProgressIndicator while loading
+- Show error message in red if login fails
+- On success: check role, save token, navigate to EventSelector
+
+SCREEN 2: EVENT SELECTOR PAGE
+- AppBar with "Select Event" title and logout IconButton
+- Show logged-in user name in AppBar subtitle
+- ListView of event cards (call GET /admin/events on init)
+- Each card shows:
+    title (bold)
+    date formatted as "Sat, May 10 • 11:00 PM CT"
+    venue name + city
+    "X / Y checked in" progress
+- RefreshIndicator for pull-to-refresh
+- On tap: navigate to ScannerPage with the selected event
+- Show only status == "published" or status == "completed"
+
+SCREEN 3: SCANNER PAGE
+- AppBar with event title and back button
+- Live check-in counter below AppBar: "47 / 142 Checked In"
+- MobileScanner widget taking most of the screen
+- Scan result overlay shown for 2500ms after each scan
+- Manual entry Row at bottom: TextField + IconButton
+  (for damaged QR codes that won't scan)
+
+SCAN RESULT OVERLAYS (full-screen colored overlay, 2.5 seconds):
+
+  GREEN  (#16A34A background)
+    Large CircleAvatar with check icon
+    "Welcome!" in large bold white text
+    Attendee name in white
+    Ticket tier name (e.g. "VIP")
+    Seat label if present (e.g. "Seat A12")
+
+  ORANGE (#D97706 background)
+    Warning icon
+    "Already Checked In" bold white
+    "First scanned at 11:14 PM" in smaller white text
+
+  RED    (#DC3545 background)
+    X icon
+    "Invalid Ticket" bold white
+    "Barcode not found" smaller white text
+
+
+----------------------------------------------------------------
+11. SCAN DEBOUNCE LOGIC — IMPORTANT
+----------------------------------------------------------------
+mobile_scanner fires onDetect continuously while a QR code is
+in frame. Without protection it will call the API dozens of
+times per second for the same code.
+
+Use these two instance variables in the scanner StatefulWidget:
+
+  String? _lastScannedBarcode;
+  bool _isProcessing = false;
+
+In the onDetect callback:
+  void _onDetect(BarcodeCapture capture) async {
+    final barcode = capture.barcodes.first.rawValue;
+    if (barcode == null) return;
+    if (_isProcessing) return;
+    if (barcode == _lastScannedBarcode) return;
+
+    setState(() => _isProcessing = true);
+    _lastScannedBarcode = barcode;
+
+    await _processBarcode(barcode);  // call API here
+
+    // After 2500ms result display, reset
+    await Future.delayed(const Duration(milliseconds: 2500));
+    setState(() {
+      _isProcessing = false;
+      _lastScannedBarcode = null;
+    });
+  }
+
+
+----------------------------------------------------------------
+12. DIO HTTP CLIENT SETUP
+----------------------------------------------------------------
+Create lib/services/api_service.dart:
+
+  import 'package:dio/dio.dart';
+  import 'package:shared_preferences/shared_preferences.dart';
+
+  class ApiService {
+    static const String baseUrl = "http://localhost:4000/api";
+
+    static Dio get client async {
+      final dio = Dio(BaseOptions(baseUrl: baseUrl));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+      if (token != null) {
+        dio.options.headers["Authorization"] = "Bearer $token";
+      }
+      return dio;
+    }
+  }
+
+Or simpler — create a single Dio instance and add an
+interceptor that reads the token from shared_preferences
+before each request.
+
+
+----------------------------------------------------------------
+13. PLATFORM PERMISSIONS REQUIRED
+----------------------------------------------------------------
+
+Android — add to AndroidManifest.xml:
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" />
+
+iOS — add to Info.plist:
+  <key>NSCameraUsageDescription</key>
+  <string>Camera is needed to scan event tickets</string>
+
+mobile_scanner handles the runtime permission request
+automatically on first use.
+
+
+----------------------------------------------------------------
+14. MOBILE_SCANNER WIDGET USAGE
+----------------------------------------------------------------
+Basic usage in the scanner screen:
+
+  MobileScanner(
+    onDetect: _onDetect,
+    controller: MobileScannerController(
+      detectionSpeed: DetectionSpeed.noDuplicates,
+    ),
+  )
+
+Use DetectionSpeed.noDuplicates as a first line of defense
+against duplicate scans (combined with the _isProcessing flag
+above for complete protection).
+
+Wrap in a ClipRRect or Container to control the size/shape
+of the camera preview on screen.
+
+
+----------------------------------------------------------------
+15. FEEDBACK — SOUND AND VIBRATION
+----------------------------------------------------------------
+Add HapticFeedback from Flutter's services package:
+
+  import 'package:flutter/services.dart';
+
+  // On successful scan:
+  HapticFeedback.mediumImpact();
+
+  // On already-scanned or invalid:
+  HapticFeedback.heavyImpact();
+
+No extra package needed. This gives physical feedback so the
+organizer knows the scan registered without looking at screen.
+
+
+----------------------------------------------------------------
+16. COLORS / BRAND
+----------------------------------------------------------------
+Primary red    : Color(0xFFDC3545)
+Gold           : Color(0xFFD4920B)
+Dark bg        : Color(0xFF1C1917)
+Mid text       : Color(0xFF57534E)
+Light text     : Color(0xFFA8A29E)
+Border         : Color(0xFFE7E5E4)
+Background     : Color(0xFFF5F5F4)
+Success green  : Color(0xFF16A34A)
+Warning orange : Color(0xFFD97706)
+Error red      : Color(0xFFDC3545)
+Teal           : Color(0xFF0D9488)
+
+
+----------------------------------------------------------------
+17. PROJECT STRUCTURE
+----------------------------------------------------------------
+lib/
+├── main.dart
+├── constants.dart            (API base URL, colors)
+├── services/
+│   └── api_service.dart      (Dio client, all API calls)
+├── models/
+│   ├── user_model.dart
+│   └── event_model.dart
+└── screens/
+    ├── login_screen.dart
+    ├── event_selector_screen.dart
+    └── scanner_screen.dart
+
+
+----------------------------------------------------------------
+18. SESSION RESTORE ON APP LAUNCH
+----------------------------------------------------------------
+In main.dart, before showing any screen:
+
+  1. Read token from shared_preferences
+  2. If token exists, call GET /auth/me with it
+  3. If response is 200: navigate to EventSelectorScreen
+  4. If response is 401: clear prefs, show LoginScreen
+  5. If no token: show LoginScreen
+
+This way the organizer stays logged in between events
+and does not need to log in every time they open the app.
+
+GET /auth/me endpoint:
+  Method  : GET
+  URL     : /auth/me
+  Header  : Authorization: Bearer <token>
+  Returns : { "user": { "id", "email", "full_name", "role" } }
+
+
+----------------------------------------------------------------
+19. TIME DISPLAY
+----------------------------------------------------------------
+All times should display in America/Chicago timezone (CT).
+Dart does not have a built-in timezone database, so use the
+intl package for formatting but display the raw local time
+with a "CT" label, or simply show the time as returned by
+the API and append "CT" to the label.
+
+Simple approach:
+  String formatTime(String utcIso) {
+    final dt = DateTime.parse(utcIso).toLocal();
+    final h = dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final m = dt.minute.toString().padLeft(2, "0");
+    final ampm = dt.hour >= 12 ? "PM" : "AM";
+    return "$h:$m $ampm CT";
+  }
+
+
+----------------------------------------------------------------
+20. SUMMARY OF ALL API CALLS
+----------------------------------------------------------------
+
+POST   /auth/login
+  body: { email, password }
+  use : login screen
+
+GET    /auth/me
+  header: Bearer token
+  use : restore session on app launch
+
+GET    /admin/events
+  header: Bearer token
+  use : event selector screen
+
+GET    /admin/events/:eventId/attendees
+  header: Bearer token
+  use : optional manual lookup list
+
+POST   /admin/checkin
+  header: Bearer token
+  body: { barcode }
+  use : CORE — every QR scan calls this
+
+
+----------------------------------------------------------------
+21. IMPORTANT NOTES
+----------------------------------------------------------------
+
+1. The app is organizer-only. After login, verify role is
+   "admin" or "super_admin". Block "user" role with a clear
+   message.
+
+2. Handle no-internet gracefully at events. Dio will throw
+   a DioException with type DioExceptionType.connectionError.
+   Show a snackbar: "No connection — check WiFi or data."
+
+3. Keep the screen awake during scanning using the
+   wakelock_plus package (optional but useful at events).
+
+4. After a successful check-in, increment the local counter
+   without re-fetching the full attendee list. This keeps
+   the UI instant.
+
+5. The MobileScanner camera preview fills its parent container.
+   Wrap in a SizedBox or Expanded to control height.
+
+6. Test on a real device — the emulator camera cannot scan
+   QR codes reliably. Use a physical iPhone or Android.
+
+
+================================================================
+END OF SPEC
+================================================================
