@@ -112,14 +112,17 @@ export default function OrganizerCreateEvent() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [slugEdited, setSlugEdited] = useState(false);
 
   const [form, setForm] = useState({
     title: "",
+    slug: "",
     description: "",
     short_description: "",
     category: "",
     ticket_type: "",   // "free" | "paid" — chosen on step 0
     is_online: null,   // true | false — chosen on step 0
+    is_global: false,
     venue_name: "",
     venue_address: "",
     city: "",
@@ -138,6 +141,12 @@ export default function OrganizerCreateEvent() {
   const [foodOptions, setFoodOptions] = useState([]);
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+
+  useEffect(() => {
+    if (!slugEdited) {
+      set("slug", form.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80));
+    }
+  }, [form.title]);
 
   // ── Validation per step ──
   const canAdvance = () => {
@@ -195,6 +204,7 @@ export default function OrganizerCreateEvent() {
       const { data: { event } } = await api.post("/events", {
         ...form,
         ...venueDefaults,
+        slug: form.slug || null,
         // Ensure numbers are clean — never send NaN
         max_tickets_per_user: parseInt(form.max_tickets_per_user) || 10,
         tiers: tiers.map((t) => ({
@@ -319,6 +329,26 @@ export default function OrganizerCreateEvent() {
             </div>
 
             <div>
+              <label className="block text-sm font-semibold text-brand-text mb-1.5">
+                Event URL <span className="text-brand-textLight font-normal">(custom link)</span>
+              </label>
+              <div className="flex items-center rounded-xl border border-brand-border bg-brand-muted overflow-hidden focus-within:border-brand-accent focus-within:bg-white transition-colors">
+                <span className="pl-4 pr-1 text-sm text-brand-textLight whitespace-nowrap">funasia.events/events/</span>
+                <input
+                  type="text"
+                  value={form.slug}
+                  onChange={(e) => {
+                    setSlugEdited(true);
+                    set("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80));
+                  }}
+                  placeholder="my-event-name"
+                  className="flex-1 py-3 pr-4 bg-transparent text-sm text-brand-text outline-none"
+                />
+              </div>
+              <p className="text-[11px] text-brand-textLight mt-1">Lowercase letters, numbers, and hyphens only. Must be unique.</p>
+            </div>
+
+            <div>
               <label className="block text-sm font-semibold text-brand-text mb-1.5">Short description * <span className="text-brand-textLight font-normal">(shown on cards)</span></label>
               <input type="text" value={form.short_description} onChange={(e) => set("short_description", e.target.value)}
                 placeholder="One sentence summary of your event" maxLength={120}
@@ -433,6 +463,21 @@ export default function OrganizerCreateEvent() {
               <input type="datetime-local" value={form.doors_open} onChange={(e) => set("doors_open", e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-brand-border bg-brand-muted text-sm outline-none focus:border-brand-accent focus:bg-white transition-colors" />
             </div>
+
+            <button
+              type="button"
+              onClick={() => set("is_global", !form.is_global)}
+              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition-all ${
+                form.is_global ? "border-brand-accent bg-red-50" : "border-brand-border hover:border-brand-textLight"
+              }`}>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-brand-text">Show event globally</p>
+                <p className="text-xs text-brand-textLight mt-0.5">Appears in all city searches, not just the event's city</p>
+              </div>
+              <div className={`w-10 h-6 rounded-full flex items-center transition-all shrink-0 ml-4 ${form.is_global ? "bg-brand-accent justify-end" : "bg-brand-muted border border-brand-border justify-start"}`}>
+                <div className="w-4 h-4 rounded-full bg-white shadow mx-1" />
+              </div>
+            </button>
           </div>
         )}
 

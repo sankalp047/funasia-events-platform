@@ -69,7 +69,7 @@ export default function OrganizerEditEvent() {
 
   const [form, setForm] = useState({
     title: "", short_description: "", description: "", category: "",
-    is_online: false, ticket_type: "paid",
+    is_online: false, ticket_type: "paid", is_global: false,
     venue_name: "", venue_address: "", city: "", state: "TX",
     event_start: "", event_end: "", doors_open: "", meeting_link: "",
   });
@@ -89,6 +89,7 @@ export default function OrganizerEditEvent() {
           category: evt.category || "",
           is_online: evt.is_online || false,
           ticket_type: evt.ticket_type || "paid",
+          is_global: evt.is_global || false,
           venue_name: evt.venue_name || "",
           venue_address: evt.venue_address || "",
           city: evt.city || "",
@@ -125,6 +126,7 @@ export default function OrganizerEditEvent() {
         event_end: centralInputToUtc(form.event_end),
         doors_open: form.doors_open ? centralInputToUtc(form.doors_open) : null,
         meeting_link: form.is_online ? (form.meeting_link || null) : null,
+        is_global: form.is_global,
         tiers: tiers.map((t) => ({
           ...(t.id ? { id: t.id } : {}),
           name: t.name,
@@ -278,6 +280,21 @@ export default function OrganizerEditEvent() {
             <input type="datetime-local" value={form.doors_open} onChange={(e) => set("doors_open", e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-brand-border bg-brand-muted text-sm outline-none focus:border-brand-accent focus:bg-white transition-colors" />
           </div>
+
+          <button
+            type="button"
+            onClick={() => set("is_global", !form.is_global)}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition-all ${
+              form.is_global ? "border-brand-accent bg-red-50" : "border-brand-border hover:border-brand-textLight"
+            }`}>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-brand-text">Show event globally</p>
+              <p className="text-xs text-brand-textLight mt-0.5">Appears in all city searches, not just the event's city</p>
+            </div>
+            <div className={`w-10 h-6 rounded-full flex items-center transition-all shrink-0 ml-4 ${form.is_global ? "bg-brand-accent justify-end" : "bg-brand-muted border border-brand-border justify-start"}`}>
+              <div className="w-4 h-4 rounded-full bg-white shadow mx-1" />
+            </div>
+          </button>
         </div>
 
         {/* Section 3: Ticket Tiers */}
