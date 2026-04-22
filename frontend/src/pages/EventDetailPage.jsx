@@ -274,6 +274,37 @@ export default function EventDetailPage() {
             </div>
           )}
 
+          {/* Transportation Widget */}
+          {!event.is_online && (
+            <div className="bg-white rounded-2xl border border-brand-border p-5 mb-6">
+              <h3 className="font-display text-lg font-bold text-brand-text mb-1">How do you want to get there?</h3>
+              {(event.venue_name || event.venue_address) && (
+                <p className="text-xs text-brand-textLight mb-4">
+                  {event.venue_name}{event.venue_name && event.venue_address ? " · " : ""}{event.venue_address}
+                </p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { emoji: "🚗", label: "Driving", mode: "driving" },
+                  { emoji: "🚌", label: "Public transport", mode: "transit" },
+                  { emoji: "🚲", label: "Biking", mode: "bicycling" },
+                  { emoji: "🚶", label: "Walking", mode: "walking" },
+                ].map(({ emoji, label, mode }) => (
+                  <a
+                    key={mode}
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${event.venue_address}, ${event.city}, TX`)}&travelmode=${mode}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl border border-brand-border hover:border-brand-accent hover:bg-red-50 transition-all text-center group"
+                  >
+                    <span className="text-2xl">{emoji}</span>
+                    <span className="text-xs font-semibold text-brand-textMid group-hover:text-brand-text">{label}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Seat Map */}
           {event.seat_map_image_url && (
             <div className="mb-6 p-5 bg-white rounded-2xl border border-brand-border">

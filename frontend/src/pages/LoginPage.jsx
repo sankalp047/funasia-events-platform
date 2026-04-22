@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import useAuthStore from "../hooks/useAuthStore";
 import toast from "react-hot-toast";
+import logo from "../logo.png";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -34,11 +35,8 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-4">
-            <span className="text-3xl">🎪</span>
-            <span className="font-display text-2xl font-extrabold text-brand-text">
-              Fun<span className="text-brand-accent">Asia</span>
-            </span>
+          <Link to="/" className="inline-flex items-center mb-4">
+            <img src={logo} alt="FunAsia Entertainment" className="h-14 w-auto mx-auto" />
           </Link>
           <h1 className="font-display text-2xl font-bold text-brand-text">Welcome back</h1>
           <p className="text-sm text-brand-textMid mt-1">Sign in to your FunAsia account</p>

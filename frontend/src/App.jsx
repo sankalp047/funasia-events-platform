@@ -31,6 +31,7 @@ import OrganizerSettings from "./pages/organizer/OrganizerSettings";
 import OrganizerCreateEvent from "./pages/organizer/OrganizerCreateEvent";
 import OrganizerPlaceholder from "./pages/organizer/OrganizerPlaceholder";
 import OrganizerPromoCodes from "./pages/organizer/OrganizerPromoCodes";
+import OrganizerEditEvent from "./pages/organizer/OrganizerEditEvent";
 
 // Pages — Super Admin
 import SuperAdminDashboard from "./pages/superadmin/SuperAdminDashboard";
@@ -151,6 +152,7 @@ export default function App() {
           <Route index element={<OrganizerDashboard />} />
           <Route path="events" element={<OrganizerEvents />} />
           <Route path="events/new" element={<OrganizerCreateEvent />} />
+          <Route path="events/:id/edit" element={<OrganizerEditEvent />} />
           <Route path="orders" element={<OrganizerOrders />} />
           <Route path="promo-codes" element={<OrganizerPromoCodes />} />
           <Route path="marketing" element={<OrganizerPlaceholder title="Marketing" description="Email campaigns, promo codes, and audience tools are coming soon." />} />
