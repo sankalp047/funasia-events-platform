@@ -189,7 +189,7 @@ export default function OrganizerCreateEvent() {
 
       // For online events the backend still requires venue_name/venue_address
       const venueDefaults = form.is_online
-        ? { venue_name: form.venue_name || "Online Event", venue_address: form.venue_address || "Online", state: form.state || "TX" }
+        ? { venue_name: form.venue_name || "Online Event", venue_address: form.venue_address || "Online", city: form.city || "", state: form.state || "TX" }
         : {};
 
       const { data: { event } } = await api.post("/events", {
