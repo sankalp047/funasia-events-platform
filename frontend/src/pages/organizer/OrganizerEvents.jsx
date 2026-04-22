@@ -222,7 +222,11 @@ export default function OrganizerEvents() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <Link to={`/organizer/events/${evt.id}/edit`}
+                      className="text-xs font-semibold text-brand-accent hover:underline">
+                      Edit
+                    </Link>
                     <Link to={`/organizer/orders?event=${evt.id}`}
                       className="text-xs text-brand-textLight hover:text-brand-text transition-colors">
                       Orders

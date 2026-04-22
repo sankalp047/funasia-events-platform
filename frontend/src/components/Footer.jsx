@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { MapPin, Globe, Mail, Instagram, Facebook, Twitter, Youtube } from "lucide-react";
+import logo from "../logo.png";
 
 const LINKS = {
   discover: [
@@ -48,11 +49,8 @@ export default function Footer() {
 
           {/* Brand column */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <Link to="/" className="inline-flex items-center gap-2 mb-4">
-              <span className="text-2xl">🎪</span>
-              <span className="font-display text-xl font-extrabold tracking-tight">
-                Fun<span className="text-brand-accent">Asia</span>
-              </span>
+            <Link to="/" className="inline-flex items-center mb-4">
+              <img src={logo} alt="FunAsia Entertainment" className="h-10 w-auto" />
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed max-w-xs mb-6">
               The home for South Asian events in Texas. Find concerts, cultural festivals, food fairs, and more — all in one place.

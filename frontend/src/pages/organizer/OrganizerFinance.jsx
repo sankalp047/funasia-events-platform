@@ -7,12 +7,21 @@ export default function OrganizerFinance() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [revenue, setRevenue] = useState([]);
+  const [revenueLoading, setRevenueLoading] = useState(true);
 
   useEffect(() => {
     api.get("/organizer/profile")
       .then((r) => setProfile(r.data.profile))
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    api.get("/organizer/revenue")
+      .then((r) => setRevenue(r.data.revenue || []))
+      .catch(() => {})
+      .finally(() => setRevenueLoading(false));
   }, []);
 
   const handleConnectStripe = async () => {
@@ -107,6 +116,81 @@ export default function OrganizerFinance() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Revenue by Event */}
+      <div className="mt-6">
+        <h3 className="font-display text-lg font-bold text-brand-text mb-4">Revenue by Event</h3>
+
+        {revenueLoading ? (
+          <div className="space-y-3">
+            {[1,2,3].map((i) => <div key={i} className="h-16 bg-brand-muted rounded-2xl animate-pulse" />)}
+          </div>
+        ) : revenue.length === 0 ? (
+          <div className="bg-brand-muted rounded-2xl p-8 text-center">
+            <p className="text-sm text-brand-textMid">No paid orders yet. Revenue will appear here once attendees purchase tickets.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-brand-border overflow-hidden">
+            {/* Header row */}
+            <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-5 py-3 bg-brand-muted text-[11px] font-semibold text-brand-textLight uppercase tracking-wider">
+              <span>Event</span>
+              <span className="text-right">Tickets</span>
+              <span className="text-right">Orders</span>
+              <span className="text-right">Gross</span>
+              <span className="text-right">Net</span>
+            </div>
+            <div className="divide-y divide-brand-border">
+              {revenue.map((evt) => (
+                <div key={evt.id} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto_auto] gap-1 sm:gap-4 px-5 py-4 items-center hover:bg-brand-muted transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-brand-text truncate">{evt.title}</p>
+                    <p className="text-xs text-brand-textLight">
+                      {new Date(evt.event_start).toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric" })}
+                      <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize ${
+                        evt.status === "published" ? "bg-teal-50 text-brand-teal" :
+                        evt.status === "completed" ? "bg-blue-50 text-blue-600" :
+                        "bg-brand-muted text-brand-textLight"
+                      }`}>{evt.status}</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-brand-text">{evt.tickets_sold}/{evt.total_tickets}</p>
+                    <p className="text-[10px] text-brand-textLight">tickets</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-brand-text">{evt.orders_count}</p>
+                    <p className="text-[10px] text-brand-textLight">orders</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-brand-text">${evt.gross_revenue.toFixed(2)}</p>
+                    <p className="text-[10px] text-brand-textLight">gross</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-brand-teal">${evt.net_revenue.toFixed(2)}</p>
+                    <p className="text-[10px] text-brand-textLight">net</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Total row */}
+            {revenue.length > 0 && (
+              <div className="flex items-center justify-between px-5 py-4 bg-brand-muted border-t border-brand-border">
+                <p className="text-sm font-bold text-brand-text">Total across all events</p>
+                <div className="flex items-center gap-8">
+                  <div className="text-right">
+                    <p className="text-xs text-brand-textLight">Gross</p>
+                    <p className="text-base font-bold text-brand-text">${revenue.reduce((s, e) => s + e.gross_revenue, 0).toFixed(2)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-brand-textLight">Net</p>
+                    <p className="text-base font-bold text-brand-teal">${revenue.reduce((s, e) => s + e.net_revenue, 0).toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

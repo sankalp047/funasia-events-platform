@@ -436,4 +436,130 @@ router.patch("/events/:id/sales", authenticate, async (req, res) => {
   }
 });
 
+// ─── Get single event for editing ───
+router.get("/events/:id", authenticate, async (req, res) => {
+  try {
+    const { data: event, error } = await supabaseAdmin
+      .from("events")
+      .select("*, ticket_tiers(*), event_media(url, is_cover, media_type, display_order)")
+      .eq("id", req.params.id)
+      .single();
+
+    if (error || !event) return res.status(404).json({ error: "Event not found" });
+    if (event.admin_id !== req.user.id) return res.status(403).json({ error: "Not your event" });
+
+    res.json({ event });
+  } catch (err) {
+    console.error("Get event error:", err);
+    res.status(500).json({ error: "Failed to fetch event" });
+  }
+});
+
+// ─── Update event (organizer) ───
+router.patch("/events/:id", authenticate, async (req, res) => {
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from("events").select("id, admin_id, status").eq("id", req.params.id).single();
+
+    if (!existing) return res.status(404).json({ error: "Event not found" });
+    if (existing.admin_id !== req.user.id) return res.status(403).json({ error: "Not your event" });
+
+    const { tiers, ...eventFields } = req.body;
+
+    // Don't allow changing status through this endpoint
+    delete eventFields.status;
+    delete eventFields.admin_id;
+
+    const { data: event, error } = await supabaseAdmin
+      .from("events").update(eventFields).eq("id", req.params.id).select().single();
+
+    if (error) throw error;
+
+    // Update tiers if provided
+    if (tiers && Array.isArray(tiers)) {
+      for (const tier of tiers) {
+        if (tier.id) {
+          // Update existing tier
+          await supabaseAdmin.from("ticket_tiers").update({
+            name: tier.name,
+            description: tier.description || "",
+            price: parseFloat(tier.price) || 0,
+            total_quantity: parseInt(tier.total_quantity) || 1,
+            max_per_user: parseInt(tier.max_per_user) || 10,
+          }).eq("id", tier.id).eq("event_id", req.params.id);
+        } else {
+          // New tier
+          await supabaseAdmin.from("ticket_tiers").insert({
+            event_id: req.params.id,
+            name: tier.name,
+            description: tier.description || "",
+            price: parseFloat(tier.price) || 0,
+            total_quantity: parseInt(tier.total_quantity) || 1,
+            max_per_user: parseInt(tier.max_per_user) || 10,
+            sold_quantity: 0,
+            is_active: true,
+          });
+        }
+      }
+    }
+
+    await supabaseAdmin.from("audit_log").insert({
+      user_id: req.user.id, action: "event.updated",
+      entity_type: "event", entity_id: req.params.id,
+      metadata: { fields_updated: Object.keys(eventFields) },
+    });
+
+    res.json({ event });
+  } catch (err) {
+    console.error("Update event error:", err);
+    res.status(500).json({ error: "Failed to update event" });
+  }
+});
+
+// ─── Revenue per event ───
+router.get("/revenue", authenticate, async (req, res) => {
+  try {
+    const { data: events } = await supabaseAdmin
+      .from("events")
+      .select("id, title, event_start, status, ticket_tiers(id, total_quantity, sold_quantity, price)")
+      .eq("admin_id", req.user.id)
+      .order("event_start", { ascending: false });
+
+    if (!events || events.length === 0) return res.json({ revenue: [] });
+
+    const eventIds = events.map((e) => e.id);
+
+    const { data: orders } = await supabaseAdmin
+      .from("orders")
+      .select("id, event_id, total, subtotal, platform_fee, stripe_fee")
+      .in("event_id", eventIds)
+      .eq("status", "paid");
+
+    const revenueByEvent = events.map((evt) => {
+      const evtOrders = (orders || []).filter((o) => o.event_id === evt.id);
+      const gross = evtOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0);
+      const fees = evtOrders.reduce((s, o) => s + parseFloat(o.platform_fee || 0) + parseFloat(o.stripe_fee || 0), 0);
+      const tickets_sold = (evt.ticket_tiers || []).reduce((s, t) => s + (t.sold_quantity || 0), 0);
+      const total_tickets = (evt.ticket_tiers || []).reduce((s, t) => s + (t.total_quantity || 0), 0);
+      return {
+        id: evt.id,
+        title: evt.title,
+        event_start: evt.event_start,
+        status: evt.status,
+        tickets_sold,
+        total_tickets,
+        orders_count: evtOrders.length,
+        gross_revenue: parseFloat(gross.toFixed(2)),
+        fees: parseFloat(fees.toFixed(2)),
+        net_revenue: parseFloat((gross - fees).toFixed(2)),
+      };
+    });
+
+    res.json({ revenue: revenueByEvent });
+  } catch (err) {
+    console.error("Revenue error:", err);
+    res.status(500).json({ error: "Failed to fetch revenue" });
+  }
+});
+
 module.exports = router;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
+import logo from "../../logo.png";
 import {
   LayoutDashboard, CalendarDays, ShoppingBag, Megaphone,
   BarChart2, Banknote, Settings, Home, Menu, X, ChevronRight, Plus, Tag,
@@ -47,11 +48,8 @@ export default function OrganizerLayout() {
         `}>
           {/* Logo */}
           <div className="p-4 border-b border-brand-border flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2">
-              <span className="text-xl">🎪</span>
-              <span className="font-display text-lg font-extrabold text-brand-text">
-                Fun<span className="text-brand-accent">Asia</span>
-              </span>
+            <Link to="/" className="flex items-center">
+              <img src={logo} alt="FunAsia Entertainment" className="h-8 w-auto" />
             </Link>
             <button onClick={() => setSidebarOpen(false)} className="md:hidden text-brand-textMid">
               <X size={18} />

@@ -49,13 +49,14 @@ const phoneOtpSchema = Joi.object({
 // ─── Event Schemas ───
 const createEventSchema = Joi.object({
   title: Joi.string().min(3).max(255).required(),
+  slug: Joi.string().pattern(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/).min(3).max(100).allow("", null),
   description: Joi.string().allow(""),
   short_description: Joi.string().max(500).allow(""),
   ticket_type: Joi.string().valid("free", "paid").required(),
   venue_name: Joi.string().required(),
   venue_address: Joi.string().required(),
-  city: Joi.string().required(),
-  state: Joi.string().required(),
+  city: Joi.string().allow("", null),
+  state: Joi.string().allow("", null).default("TX"),
   zip_code: Joi.string().allow(""),
   event_start: Joi.string().isoDate().required(),
   event_end: Joi.string().isoDate().required(),
@@ -63,6 +64,7 @@ const createEventSchema = Joi.object({
   seat_map_image_url: Joi.string().uri().allow("", null),
   category: Joi.string().valid("Music", "Nightlife", "Hobbies", "Business", "Dance", "concerts", "cultural", "conferences", "sports").allow("", null),
   is_online: Joi.boolean().default(false),
+  is_global: Joi.boolean().default(false),
   meeting_link: Joi.string().uri().allow("", null),
   max_tickets_per_user: Joi.number().integer().min(1).max(50).default(10),
   tiers: Joi.array()

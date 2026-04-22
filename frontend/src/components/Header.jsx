@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import logo from "../logo.png";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Menu, X, MapPin, Ticket, LogOut, ChevronDown,
@@ -174,11 +175,8 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center gap-3 h-16">
 
         {/* ── Logo ── */}
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl">🎪</span>
-          <span className="font-display text-xl font-extrabold text-brand-text hidden sm:inline">
-            Fun<span className="text-brand-accent">Asia</span>
-          </span>
+        <Link to="/" className="flex items-center shrink-0">
+          <img src={logo} alt="FunAsia Entertainment" className="h-10 w-auto" />
         </Link>
 
         {/* ── Search Bar ── */}

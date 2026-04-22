@@ -39,9 +39,9 @@ router.get("/", validateQuery(searchEventsSchema), optionalAuth, async (req, res
       `, { count: "exact" })
       .in("status", ["published", "completed", "cancelled"]);
 
-    // City/State filter
-    if (city) query = query.ilike("city", `%${city}%`);
-    if (state) query = query.ilike("state", `%${state}%`);
+    // City/State filter — global events always included
+    if (city) query = query.or(`city.ilike.%${city}%,is_global.eq.true`);
+    if (state) query = query.or(`state.ilike.%${state}%,is_global.eq.true`);
 
     // Category filter
     if (category) query = query.eq("category", category);
@@ -172,7 +172,14 @@ router.get("/:idOrSlug", optionalAuth, async (req, res) => {
 router.post("/", authenticate, requireRole("admin", "super_admin"), validate(createEventSchema), async (req, res) => {
   const data = req.validated;
   try {
-    const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36);
+    let slug;
+    if (data.slug) {
+      const { data: existing } = await supabaseAdmin.from("events").select("id").eq("slug", data.slug).maybeSingle();
+      if (existing) return res.status(400).json({ error: "That URL is already taken. Choose a different one." });
+      slug = data.slug;
+    } else {
+      slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36);
+    }
 
     const { data: feeSettings } = await supabaseAdmin
       .from("platform_settings").select("key, value")
@@ -188,6 +195,7 @@ router.post("/", authenticate, requireRole("admin", "super_admin"), validate(cre
       doors_open: data.doors_open, seat_map_image_url: data.seat_map_image_url,
       max_tickets_per_user: data.max_tickets_per_user, category: data.category || null,
       is_online: data.is_online || false,
+      is_global: data.is_global || false,
       meeting_link: data.is_online ? (data.meeting_link || null) : null,
       platform_fee_percent: data.ticket_type === "free" ? 0 : (feeMap.default_platform_fee_percent || 0),
       platform_fee_flat: data.ticket_type === "free" ? 0 : (feeMap.default_platform_fee_flat || 0),
