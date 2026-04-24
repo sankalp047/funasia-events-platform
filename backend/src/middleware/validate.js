@@ -107,6 +107,7 @@ const searchEventsSchema = Joi.object({
   search: Joi.string().allow(""),
   ticket_type: Joi.string().valid("free", "paid").allow(""),
   is_online: Joi.boolean(),
+  is_global: Joi.boolean(),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(20),
   sort: Joi.string().valid("date_asc", "date_desc", "price_asc", "price_desc", "popular").default("date_asc"),

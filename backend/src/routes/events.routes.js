@@ -26,7 +26,7 @@ router.get("/autocomplete", optionalAuth, async (req, res) => {
 
 // ─── Search Events (city-first + nearby + sponsored) ───
 router.get("/", validateQuery(searchEventsSchema), optionalAuth, async (req, res) => {
-  const { lat, lng, radius_miles, city, state, category, search, ticket_type, is_online, page, limit, sort } = req.validatedQuery;
+  const { lat, lng, radius_miles, city, state, category, search, ticket_type, is_online, is_global, page, limit, sort } = req.validatedQuery;
   const offset = (page - 1) * limit;
 
   try {
@@ -39,9 +39,9 @@ router.get("/", validateQuery(searchEventsSchema), optionalAuth, async (req, res
       `, { count: "exact" })
       .in("status", ["published", "completed", "cancelled"]);
 
-    // City/State filter — global events always included
-    if (city) query = query.or(`city.ilike.%${city}%,is_global.eq.true`);
-    if (state) query = query.or(`state.ilike.%${state}%,is_global.eq.true`);
+    // City/State filter
+    if (city) query = query.ilike("city", `%${city}%`);
+    if (state) query = query.ilike("state", `%${state}%`);
 
     // Category filter
     if (category) query = query.eq("category", category);
@@ -51,6 +51,9 @@ router.get("/", validateQuery(searchEventsSchema), optionalAuth, async (req, res
 
     // Online events filter
     if (is_online !== undefined) query = query.eq("is_online", is_online);
+
+    // Global events filter
+    if (is_global !== undefined) query = query.eq("is_global", is_global);
 
     // Text search
     if (search) {

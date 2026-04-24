@@ -28,8 +28,10 @@ export default function HomePage() {
   // All events store
   const [allEvents, setAllEvents] = useState([]);
   const [citySection, setCitySectionEvents] = useState({});
+  const [globalEvents, setGlobalEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cityLoading, setCityLoading] = useState(true);
+  const [globalLoading, setGlobalLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
 
   // Active category filter (null = all)
@@ -99,6 +101,17 @@ export default function HomePage() {
       }
     };
     fetchCities();
+  }, [activeCategory]);
+
+  // ── Fetch global events ──
+  useEffect(() => {
+    setGlobalLoading(true);
+    const params = { is_global: true, limit: 8, sort: "date_asc" };
+    if (activeCategory) params.category = activeCategory;
+    api.get("/events", { params })
+      .then((r) => setGlobalEvents(r.data.events || []))
+      .catch(() => setGlobalEvents([]))
+      .finally(() => setGlobalLoading(false));
   }, [activeCategory]);
 
   // ── Derived data ──
@@ -301,6 +314,36 @@ export default function HomePage() {
       </section>
 
       {/* ────────────────────────────────────────────
+          GLOBAL EVENTS SECTION
+      ──────────────────────────────────────────── */}
+      {(globalLoading || globalEvents.length > 0) && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-12">
+          <div className="flex items-baseline justify-between mb-4">
+            <div>
+              <h2 className="font-display text-xl font-bold text-brand-text flex items-center gap-2">
+                <Globe size={18} className="text-brand-accent" /> Global Events
+              </h2>
+              <p className="text-xs text-brand-textLight mt-0.5">Featured events available everywhere</p>
+            </div>
+            <Link to="/events?is_global=true"
+              className="text-sm text-brand-accent font-semibold hover:underline flex items-center gap-1 shrink-0">
+              See all <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {globalLoading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-56 bg-brand-muted rounded-2xl animate-pulse" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {globalEvents.slice(0, 4).map((evt) => <EventCard key={evt.id} event={evt} compact />)}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ────────────────────────────────────────────
           TEXAS CITY SECTIONS
       ──────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-16 space-y-10">
@@ -390,6 +433,11 @@ export function EventCard({ event, sponsored, compact }) {
               {event.is_online && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-bold">
                   <Globe size={8} /> Online
+                </span>
+              )}
+              {event.is_global && !event.is_online && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500 text-white text-[10px] font-bold">
+                  <Globe size={8} /> Global
                 </span>
               )}
             </>
